@@ -106,10 +106,11 @@ class MsGraphMailTransport extends Transport {
             'bccRecipients' => $this->toRecipientCollection($message->getBcc()),
             'importance' => $priority === 3 ? 'Normal' : ($priority < 3 ? 'Low' : 'High'),
             'body' => [
-                'contentType' => Str::contains($message->getContentType(), ['text', 'plain']) ? 'text' : 'html',
+                'contentType' => Str::contains($message->getContentType(), 'text/plain') ? 'text' : 'html',
                 'content' => $message->getBody(),
             ],
             'attachments' => $this->toAttachmentCollection($attachments),
+            'internetMessageHeaders' => $this->toInternetMessageHeaders($message->getHeaders()),
         ]);
     }
 
@@ -180,6 +181,32 @@ class MsGraphMailTransport extends Transport {
         }
 
         return $collection;
+    }
+
+    /**
+     * Transforms given Swift Mime SimpleHeaderSet into
+     * Microsoft Graph internet message headers
+     * @param \Swift_Mime_SimpleHeaderSet $headers
+     * @return array|null
+     */
+    protected function toInternetMessageHeaders(\Swift_Mime_SimpleHeaderSet $headers): ?array {
+        $customHeaders = [];
+
+        foreach ($headers->getAll() as $header) {
+            $name = $header->getFieldName();
+            $body = $header->getFieldBody();
+
+            if (isset($name, $body) && str_starts_with($name, 'X-')) {
+                $customHeaders[] = [
+                    'name' => $name,
+                    'value' => $body,
+                ];
+            }
+        }
+
+        return count($customHeaders) > 0
+            ? $customHeaders
+            : null;
     }
 
     /**
